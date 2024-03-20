@@ -1,0 +1,2 @@
+numpy
+pyaudio==0.2.14
