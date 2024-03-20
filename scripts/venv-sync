@@ -1,0 +1,11 @@
+#!/bin/zsh
+
+base=${0:A:h}/../
+
+if [[ ! -d $base/.venv ]]; then
+	python3 -m venv $base/.venv
+fi
+
+source $base/.venv/bin/activate
+python -m pip install -r $base/requirements.txt
+deactivate
