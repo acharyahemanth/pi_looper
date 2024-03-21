@@ -1,16 +1,15 @@
 from dataclasses import dataclass
+from typer import Typer
 import pyaudio
+import rich
 from pathlib import Path
 import wave
-from tqdm import tqdm
-from typer import Typer
-import rich
 
 app = Typer()
 
 
 @dataclass
-class Mic:
+class Speaker:
     name: str
     index: int
     sample_rate: int
@@ -19,47 +18,40 @@ class Mic:
     sample_format: int
 
     @classmethod
-    def from_blueyeti(cls):
+    def from_bt_headphones(cls):
         pyaud = pyaudio.PyAudio()
-        def_device_info = pyaud.get_default_input_device_info()
+        def_device_info = pyaud.get_default_output_device_info()
         print("using default audio device : ")
         rich.print(def_device_info)
 
         channels = 1
-        # sample_rate = int(def_device_info['defaultSampleRate']) # pyright: ignore
         sample_rate = 44_100  # reducing the sampling rate because of input overflows!
         sample_format = pyaudio.paInt16
         stream = pyaud.open(
             rate=sample_rate,
             channels=channels,
             format=sample_format,
-            input=True,
+            output=True,
             start=False,
         )
 
         return cls(
-            name=def_device_info["name"],
-            index=def_device_info["index"],
+            name=def_device_info["name"],  # pyright: ignore
+            index=def_device_info["index"],  # pyright: ignore
             channels=channels,
             sample_rate=sample_rate,
             sample_format=sample_format,
             stream=stream,
         )  # pyright: ignore
 
-    def record_to_file(self, seconds: float, path: Path):
+    def play_from_file(self, path: Path):
         self.stream.start_stream()
 
-        with wave.open(str(path), "wb") as wf:
+        with wave.open(str(path), "rb") as wf:
             p = pyaudio.PyAudio()
-            wf.setnchannels(self.channels)
-            wf.setsampwidth(p.get_sample_size(self.sample_format))
-            wf.setframerate(self.sample_rate)
-
-            print("Recording...")
             chunk = 1024
-            for _ in tqdm(range(0, (self.sample_rate * seconds) // chunk)):
-                wf.writeframes(self.stream.read(chunk, exception_on_overflow=False))
-            print("Done!")
+            while len(data := wf.readframes(chunk)):  # Requires Python 3.8+ for :=
+                self.stream.write(data, exception_on_underflow=False)
 
             self.stream.stop_stream()
             self.stream.close()
@@ -67,9 +59,9 @@ class Mic:
 
 
 @app.command()
-def test_mic(record_seconds: int = 5):
-    mic = Mic.from_blueyeti()
-    mic.record_to_file(record_seconds, Path("./test.wav"))
+def test_speaker(wav_file: Path):
+    speaker = Speaker.from_bt_headphones()
+    speaker.play_from_file(wav_file)
 
 
 if __name__ == "__main__":
