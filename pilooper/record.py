@@ -3,6 +3,9 @@ import pyaudio
 from pathlib import Path
 import wave
 from tqdm import tqdm
+from typer import Typer
+
+app = Typer()
 
 
 @dataclass
@@ -79,6 +82,11 @@ class Mic:
             p.terminate()
 
 
-if __name__ == "__main__":
+@app.command()
+def test_mic(record_seconds: int = 5):
     mic = Mic.from_blueyeti()
-    mic.record_to_file(5, Path("./test.wav"))
+    mic.record_to_file(record_seconds, Path("./test.wav"))
+
+
+if __name__ == "__main__":
+    app()
