@@ -1,2 +1,6 @@
 numpy
 pyaudio==0.2.14
+pyright
+rich
+tqdm
+ruff
