@@ -8,4 +8,5 @@ fi
 
 source $base/.venv/bin/activate
 python -m pip install -r $base/requirements.txt
+echo $(realpath $base) > $base/.venv/lib/python3.11/site-packages/pi_looper.pth
 deactivate

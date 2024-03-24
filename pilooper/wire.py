@@ -1,10 +1,11 @@
-from dataclasses import dataclass
-import pyaudio
-from pathlib import Path
 import wave
+from dataclasses import dataclass
+from pathlib import Path
+
+import pyaudio
+import rich
 from tqdm import tqdm
 from typer import Typer
-import rich
 
 app = Typer()
 

@@ -1,9 +1,14 @@
+from typing import assert_never
+import wave
 from dataclasses import dataclass
-from typer import Typer
+from pathlib import Path
+
 import pyaudio
 import rich
-from pathlib import Path
-import wave
+from typer import Typer
+
+from pilooper.constants import SAMPLING_RATE
+from pilooper.mixer import Mixer
 
 app = Typer()
 
@@ -18,21 +23,29 @@ class Speaker:
     sample_format: int
 
     @classmethod
-    def from_bt_headphones(cls):
+    def from_bt_headphones(cls, mixer: Mixer | None = None):
         pyaud = pyaudio.PyAudio()
         def_device_info = pyaud.get_default_output_device_info()
         print("using default audio device : ")
         rich.print(def_device_info)
 
         channels = 1
-        sample_rate = 44_100  # reducing the sampling rate because of input overflows!
+        sample_rate = SAMPLING_RATE
         sample_format = pyaudio.paInt16
+        match mixer:
+            case None:
+                callback = None
+            case Mixer():
+                callback = mixer.speaker_callback
+            case _:
+                assert_never(mixer)
         stream = pyaud.open(
             rate=sample_rate,
             channels=channels,
             format=sample_format,
             output=True,
             start=False,
+            stream_callback=callback,  # pyright: ignore
         )
 
         return cls(
@@ -43,6 +56,15 @@ class Speaker:
             sample_format=sample_format,
             stream=stream,
         )  # pyright: ignore
+
+    def start(self):
+        self.stream.start_stream()
+
+    def stop(self):
+        self.stream.stop_stream()
+
+    def __del__(self):
+        self.stream.close()
 
     def play_from_file(self, path: Path):
         self.stream.start_stream()
