@@ -26,6 +26,8 @@ def test_looper():
     speaker.start()
 
     for _ in range(2):
+        print("next record begins in 3 seconds...")
+        time.sleep(3)
         print(f"start record for {record_time_seconds} seconds...")
         record()
         print("mixing...")

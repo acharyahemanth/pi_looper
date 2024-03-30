@@ -149,7 +149,7 @@ class Mixer:
 
             # extend smaller track to the size of the larger one
             def _extend(x: np.ndarray, x_length: int, by: int):
-                extend_to = min(x_length + by, len(x))
+                extend_to = min(x_length + by, x.nbytes)
                 num_tile = extend_to // x_length
                 extended = np.zeros_like(x)
                 extended[: num_tile * x_length] = np.tile(x[:x_length], num_tile)
