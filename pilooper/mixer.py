@@ -21,7 +21,7 @@ class Track:
     # index to start reading / writing (depending on speaker / mic)
     rw_idx: int = 0
     # length of data thats filled (in bytes)
-    length: int = 0
+    length_bytes: int = 0
 
 
 @dataclass
@@ -34,21 +34,21 @@ class SpeakerTrack:
             return bytes(0)
 
         # no data yet, play nothing
-        if self.track.length == 0:
+        if self.track.length_bytes == 0:
             self.track.mutex.release()
             return bytes(frame_count * 2)
 
-        if self.track.length < frame_count * 2:
+        if self.track.length_bytes < frame_count * 2:
             print(
                 f"warning : not enough speaker data, {len(self.track.data)/2}/{frame_count} speaker stream may stop!"
             )
 
-        num_bytes = min(frame_count * 2, self.track.length)
+        num_bytes = min(frame_count * 2, self.track.length_bytes)
         start = self.track.rw_idx
-        end = (self.track.rw_idx + num_bytes) % self.track.length
+        end = (self.track.rw_idx + num_bytes) % self.track.length_bytes
         if end < start:
             mem = memoryview(
-                self.track.data[start : self.track.length] + self.track.data[:end]
+                self.track.data[start : self.track.length_bytes] + self.track.data[:end]
             )
         else:
             mem = memoryview(self.track.data[start:end])
@@ -87,14 +87,14 @@ class MicTrack:
         num_bytes = end - start
         self.track.data[start:end] = in_data[:num_bytes]
         self.track.rw_idx = end
-        self.track.length = end
+        self.track.length_bytes = end
         self.track.mutex.release()
 
         return True
 
     def reset(self):
         self.track.rw_idx = 0
-        self.track.length = 0
+        self.track.length_bytes = 0
         self.is_full = False
 
 
@@ -131,27 +131,27 @@ class Mixer:
 
     def mix(self):
         with self.mic_track.track.mutex, self.speaker_track.track.mutex:
-            if self.mic_track.track.length == 0:
+            if self.mic_track.track.length_bytes == 0:
                 return
             self.logger.debug("mix()")
 
             # no speaker track so far, just copy over the mic track
-            if self.speaker_track.track.length == 0:
-                num_bytes = self.mic_track.track.length
+            if self.speaker_track.track.length_bytes == 0:
+                num_bytes = self.mic_track.track.length_bytes
                 self.speaker_track.track.data[:num_bytes] = self.mic_track.track.data[
                     :num_bytes
                 ]
-                self.speaker_track.track.length = num_bytes
+                self.speaker_track.track.length_bytes = num_bytes
                 self.mic_track.reset()
                 self.speaker_track.reset_playback()
                 self.logger.debug(
-                    f"init speaker track by copying over mic track, speaker_len : {self.speaker_track.track.length}"
+                    f"init speaker track by copying over mic track, speaker_len : {self.speaker_track.track.length_bytes}"
                 )
                 return
 
             self.logger.debug("mixing mic track with speaker track")
             self.logger.debug(
-                f"prev speaker track len : {self.speaker_track.track.length}, mic track len : {self.mic_track.track.length}"
+                f"prev speaker track len : {self.speaker_track.track.length_bytes}, mic track len : {self.mic_track.track.length_bytes}"
             )
 
             # create np buffers (no copies at this point)
@@ -159,10 +159,12 @@ class Mixer:
             np_mic = np.frombuffer(self.mic_track.track.data, np.int16)
             assert (
                 len(np_speaker) == len(np_mic)
-            ), f"speaker and mic tracs arent of same length : {len(np_speaker)} / {len(np_mic)}"
+            ), f"speaker and mic tracs arent of same length : {np_speaker.nbytes} / {np_mic.nbytes}"
 
             # extend smaller track to the size of the larger one
-            def _extend(x: np.ndarray, x_length: int, by: int):
+            def _extend(x: np.ndarray, x_length_bytes: int, by_bytes: int):
+                x_length = x_length_bytes // 2
+                by = by_bytes // 2
                 extend_to = min(x_length + by, len(x))
                 num_tile = extend_to // x_length
                 extended = np.zeros_like(x)
@@ -170,30 +172,32 @@ class Mixer:
                 self.logger.debug(
                     f"_extend() : extend_to : {extend_to}, num_tile : {num_tile}"
                 )
-                return extended, extend_to
+                return extended, extend_to * 2
 
             extend_speaker_track = (
-                self.speaker_track.track.length < self.mic_track.track.length
+                self.speaker_track.track.length_bytes
+                < self.mic_track.track.length_bytes
             )
-            extend_by = abs(
-                self.speaker_track.track.length - self.mic_track.track.length
+            extend_by_bytes = abs(
+                self.speaker_track.track.length_bytes
+                - self.mic_track.track.length_bytes
             )
             self.logger.debug(
-                f"extend_speaker_track : {extend_speaker_track} extend_mic_track : {not extend_speaker_track} extend_by : {extend_by}"
+                f"extend_speaker_track : {extend_speaker_track} extend_mic_track : {not extend_speaker_track} extend_by : {extend_by_bytes}"
             )
-            new_speaker_len = None
+            new_speaker_len_bytes = None
             if extend_speaker_track:
-                np_speaker, new_speaker_len = _extend(
-                    np_speaker, self.speaker_track.track.length // 2, extend_by // 2
+                np_speaker, new_speaker_len_bytes = _extend(
+                    np_speaker, self.speaker_track.track.length_bytes, extend_by_bytes
                 )
             else:
                 np_mic, _ = _extend(
-                    np_mic, self.mic_track.track.length // 2, extend_by // 2
+                    np_mic, self.mic_track.track.length_bytes, extend_by_bytes
                 )
 
             assert (
                 len(np_speaker) == len(np_mic)
-            ), f"speaker and mic tracs arent of same length : {len(np_speaker)} / {len(np_mic)}"
+            ), f"speaker and mic tracs arent of same length_bytes : {np_speaker.nbytes} / {np_mic.nbytes}"
 
             # mix and take care of clipping
             mixed = np_speaker.astype(np.int32) + np_mic.astype(np.int32)
@@ -203,7 +207,7 @@ class Mixer:
             mixed = mixed.astype(np.int16)
 
             self.speaker_track.track.data = bytearray(mixed.tobytes())
-            if new_speaker_len:
-                self.speaker_track.track.length = new_speaker_len
+            if new_speaker_len_bytes:
+                self.speaker_track.track.length_bytes = new_speaker_len_bytes
             self.mic_track.reset()
             self.speaker_track.reset_playback()

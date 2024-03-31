@@ -31,7 +31,7 @@ def test_basic():
 
     speaker_audio_1 = np.frombuffer(mixer.speaker_track.track.data, dtype=np.int16)
     speaker_audio_1 = speaker_audio_1[:num_record_samples]
-    assert mixer.speaker_track.track.length == num_record_samples * 2
+    assert mixer.speaker_track.track.length_bytes == num_record_samples * 2
     assert mixer.speaker_track.track.rw_idx == 0
     assert np.allclose(mic_audio_1, speaker_audio_1)
     print("mix-1 success!")
@@ -41,7 +41,7 @@ def test_basic():
 
     speaker_audio_2 = np.frombuffer(mixer.speaker_track.track.data, dtype=np.int16)
     speaker_audio_2 = speaker_audio_2[:num_record_samples]
-    assert mixer.speaker_track.track.length == num_record_samples * 2
+    assert mixer.speaker_track.track.length_bytes == num_record_samples * 2
     assert mixer.speaker_track.track.rw_idx == 0
     expected_mix = mic_audio_1.astype(np.float32) + mic_audio_2.astype(np.float32)
     expected_mix = np.clip(
@@ -82,7 +82,7 @@ def test_track_lengths():
 
     # check if speaker track is extended correctly
     assert (
-        mixer.speaker_track.track.length == 2 * num_record_samples_long
+        mixer.speaker_track.track.length_bytes == 2 * num_record_samples_long
     ), "speaker track is not off correct length"
     np_speaker = np.frombuffer(mixer.speaker_track.track.data, dtype=np.int16)[
         :num_record_samples_long
