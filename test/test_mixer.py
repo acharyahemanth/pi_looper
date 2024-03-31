@@ -182,6 +182,25 @@ def test_speaker_loop():
         np_speaker = np.frombuffer(speaker_audio, dtype=np.int16)[:num_record_samples]
         assert np.allclose(np_speaker, np_mic)
 
+    # read fewer samples and loop
+    mixer.speaker_track.reset_playback()
+
+    num_samples_to_read = 500  # with 44_100, theres 100 samples left at the end
+    num_callbacks_per_track = num_record_samples // num_samples_to_read
+    full_speaker_audio = bytearray(0)
+    for _ in range(5):
+        for _ in range(num_callbacks_per_track):
+            speaker_audio, _ = mixer.speaker_callback(
+                None, num_samples_to_read, {}, None
+            )
+            full_speaker_audio.extend(speaker_audio)
+    speaker_audio, _ = mixer.speaker_callback(None, num_samples_to_read, {}, None)
+    full_speaker_audio.extend(speaker_audio)
+
+    np_speaker = np.frombuffer(full_speaker_audio, dtype=np.int16)
+    np_mic_tiled = np.tile(np_mic, 5)
+    assert np.allclose(np_speaker, np_mic_tiled)
+
 
 if __name__ == "__main__":
     app()

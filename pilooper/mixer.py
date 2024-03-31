@@ -51,11 +51,15 @@ class SpeakerTrack:
         start = self.track.rw_idx
         end = (self.track.rw_idx + num_bytes) % (self.track.length_bytes + 1)
         if end < start:
+            end += 1
             mem = memoryview(
                 self.track.data[start : self.track.length_bytes] + self.track.data[:end]
             )
         else:
             mem = memoryview(self.track.data[start:end])
+        assert (
+            len(mem) == num_bytes
+        ), f"didnt pick correct number of bytes : start : {start}, end : {end}, track_length : {self.track.length_bytes}, len(mem) : {len(mem)}"
 
         self.track.rw_idx = end % self.track.length_bytes
         self.track.mutex.release()
