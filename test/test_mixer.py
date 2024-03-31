@@ -117,5 +117,45 @@ def test_track_lengths():
     print("TEST PASS!")
 
 
+@app.command()
+def test_overflow():
+    mixer = Mixer.create_mixer(track_length_seconds=1, log_level=logging.DEBUG)
+
+    num_record_samples_first = 44_100 * 1
+    num_record_samples_second = 44_100 * 1
+    mic_audio_first = np.random.randint(
+        low=np.iinfo(np.int16).min,
+        high=np.iinfo(np.int16).max,
+        dtype=np.int16,
+        size=num_record_samples_first,
+    )
+    mic_audio_second = np.random.randint(
+        low=np.iinfo(np.int16).min,
+        high=np.iinfo(np.int16).max,
+        dtype=np.int16,
+        size=num_record_samples_second,
+    )
+
+    # check if speaker track is extended correctly
+    def check_mix():
+        assert (
+            mixer.speaker_track.track.length_bytes == 2 * num_record_samples_first
+        ), "speaker track is not off correct length"
+        np_speaker = np.frombuffer(mixer.speaker_track.track.data, dtype=np.int16)[
+            :num_record_samples_first
+        ]
+        assert np.allclose(np_speaker, mic_audio_first)
+
+    # record first track
+    mixer.mic_callback(mic_audio_first.tobytes(), num_record_samples_first, 0, {})
+
+    # record second track
+    mixer.mic_callback(mic_audio_second.tobytes(), num_record_samples_second, 0, {})
+
+    mixer.mix()
+
+    check_mix()
+
+
 if __name__ == "__main__":
     app()
