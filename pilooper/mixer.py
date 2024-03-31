@@ -4,6 +4,7 @@ from collections import deque
 import pyaudio
 import pilooper.constants as constants
 from threading import Lock
+import logging
 
 Pa_Callback_Flags = (
     pyaudio.paInputUnderflow
@@ -101,15 +102,19 @@ class MicTrack:
 class Mixer:
     mic_track: MicTrack
     speaker_track: SpeakerTrack
+    logger: logging.Logger
 
     @classmethod
-    def create_mixer(cls, track_length_seconds: int):
+    def create_mixer(cls, track_length_seconds: int, log_level=logging.INFO):
         buff_len = constants.SAMPLING_RATE * track_length_seconds * 2  # int16
+        logger = logging.getLogger("mixer")
+        logger.setLevel(log_level)
         return cls(
             mic_track=MicTrack(track=Track(data=bytearray(buff_len), mutex=Lock())),
             speaker_track=SpeakerTrack(
                 track=Track(data=bytearray(buff_len), mutex=Lock())
             ),
+            logger=logger,
         )
 
     def mic_callback(
@@ -128,6 +133,7 @@ class Mixer:
         with self.mic_track.track.mutex, self.speaker_track.track.mutex:
             if self.mic_track.track.length == 0:
                 return
+            self.logger.debug("mix()")
 
             # no speaker track so far, just copy over the mic track
             if self.speaker_track.track.length == 0:
@@ -138,7 +144,15 @@ class Mixer:
                 self.speaker_track.track.length = num_bytes
                 self.mic_track.reset()
                 self.speaker_track.reset_playback()
+                self.logger.debug(
+                    f"init speaker track by copying over mic track, speaker_len : {self.speaker_track.track.length}"
+                )
                 return
+
+            self.logger.debug("mixing mic track with speaker track")
+            self.logger.debug(
+                f"prev speaker track len : {self.speaker_track.track.length}, mic track len : {self.mic_track.track.length}"
+            )
 
             # create np buffers (no copies at this point)
             np_speaker = np.frombuffer(self.speaker_track.track.data, dtype=np.int16)
@@ -149,10 +163,13 @@ class Mixer:
 
             # extend smaller track to the size of the larger one
             def _extend(x: np.ndarray, x_length: int, by: int):
-                extend_to = min(x_length + by, x.nbytes)
+                extend_to = min(x_length + by, len(x))
                 num_tile = extend_to // x_length
                 extended = np.zeros_like(x)
                 extended[: num_tile * x_length] = np.tile(x[:x_length], num_tile)
+                self.logger.debug(
+                    f"_extend() : extend_to : {extend_to}, num_tile : {num_tile}"
+                )
                 return extended, extend_to
 
             extend_speaker_track = (
@@ -161,13 +178,18 @@ class Mixer:
             extend_by = abs(
                 self.speaker_track.track.length - self.mic_track.track.length
             )
+            self.logger.debug(
+                f"extend_speaker_track : {extend_speaker_track} extend_mic_track : {not extend_speaker_track} extend_by : {extend_by}"
+            )
             new_speaker_len = None
             if extend_speaker_track:
                 np_speaker, new_speaker_len = _extend(
-                    np_speaker, self.speaker_track.track.length, extend_by
+                    np_speaker, self.speaker_track.track.length // 2, extend_by // 2
                 )
             else:
-                np_mic, _ = _extend(np_mic, self.mic_track.track.length, extend_by)
+                np_mic, _ = _extend(
+                    np_mic, self.mic_track.track.length // 2, extend_by // 2
+                )
 
             assert (
                 len(np_speaker) == len(np_mic)
