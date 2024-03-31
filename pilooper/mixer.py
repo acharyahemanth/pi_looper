@@ -49,7 +49,7 @@ class SpeakerTrack:
 
         num_bytes = min(frame_count * 2, self.track.length_bytes)
         start = self.track.rw_idx
-        end = (self.track.rw_idx + num_bytes) % self.track.length_bytes
+        end = (self.track.rw_idx + num_bytes) % (self.track.length_bytes + 1)
         if end < start:
             mem = memoryview(
                 self.track.data[start : self.track.length_bytes] + self.track.data[:end]
@@ -57,7 +57,7 @@ class SpeakerTrack:
         else:
             mem = memoryview(self.track.data[start:end])
 
-        self.track.rw_idx = end
+        self.track.rw_idx = end % self.track.length_bytes
         self.track.mutex.release()
         return bytes(mem)
 

@@ -157,5 +157,31 @@ def test_overflow():
     check_mix()
 
 
+@app.command()
+def test_speaker_loop():
+    mixer = Mixer.create_mixer(track_length_seconds=1, log_level=logging.DEBUG)
+
+    num_record_samples = 44_100 * 1
+    mic_audio = np.random.randint(
+        low=np.iinfo(np.int16).min,
+        high=np.iinfo(np.int16).max,
+        dtype=np.int16,
+        size=num_record_samples,
+    )
+
+    # record audio
+    mixer.mic_callback(mic_audio.tobytes(), num_record_samples, 0, {})
+
+    # mix
+    mixer.mix()
+
+    # check speaker loop
+    np_mic = np.frombuffer(mic_audio, dtype=np.int16)
+    for _ in range(5):
+        speaker_audio, _ = mixer.speaker_callback(None, num_record_samples, {}, None)
+        np_speaker = np.frombuffer(speaker_audio, dtype=np.int16)[:num_record_samples]
+        assert np.allclose(np_speaker, np_mic)
+
+
 if __name__ == "__main__":
     app()
