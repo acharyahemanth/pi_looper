@@ -72,6 +72,25 @@ def test_track_lengths():
         size=num_record_samples_short,
     )
 
+    # check if speaker track is extended correctly
+    def check_mix():
+        assert (
+            mixer.speaker_track.track.length_bytes == 2 * num_record_samples_long
+        ), "speaker track is not off correct length"
+        np_speaker = np.frombuffer(mixer.speaker_track.track.data, dtype=np.int16)[
+            :num_record_samples_long
+        ]
+        np_mic_short_ext = np.concatenate([mic_audio_short, mic_audio_short], axis=0)
+
+        expected_mix = mic_audio_long.astype(np.float32) + np_mic_short_ext.astype(
+            np.float32
+        )
+        expected_mix = np.clip(
+            expected_mix, a_min=np.iinfo(np.int16).min, a_max=np.iinfo(np.int16).max
+        )
+
+        assert np.allclose(np_speaker.astype(np.float32), expected_mix)
+
     # record longer track
     mixer.mic_callback(mic_audio_long.tobytes(), num_record_samples_long, 0, {})
     mixer.mix()
@@ -80,23 +99,20 @@ def test_track_lengths():
     mixer.mic_callback(mic_audio_short.tobytes(), num_record_samples_short, 0, {})
     mixer.mix()
 
-    # check if speaker track is extended correctly
-    assert (
-        mixer.speaker_track.track.length_bytes == 2 * num_record_samples_long
-    ), "speaker track is not off correct length"
-    np_speaker = np.frombuffer(mixer.speaker_track.track.data, dtype=np.int16)[
-        :num_record_samples_long
-    ]
-    np_mic_short_ext = np.concatenate([mic_audio_short, mic_audio_short], axis=0)
+    check_mix()
 
-    expected_mix = mic_audio_long.astype(np.float32) + np_mic_short_ext.astype(
-        np.float32
-    )
-    expected_mix = np.clip(
-        expected_mix, a_min=np.iinfo(np.int16).min, a_max=np.iinfo(np.int16).max
-    )
+    # add mic tracks the other way round
+    mixer.reset()
 
-    assert np.allclose(np_speaker.astype(np.float32), expected_mix)
+    # record shorter track
+    mixer.mic_callback(mic_audio_short.tobytes(), num_record_samples_short, 0, {})
+    mixer.mix()
+
+    # record longer track
+    mixer.mic_callback(mic_audio_long.tobytes(), num_record_samples_long, 0, {})
+    mixer.mix()
+
+    check_mix()
 
     print("TEST PASS!")
 

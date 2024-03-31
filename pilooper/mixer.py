@@ -23,6 +23,10 @@ class Track:
     # length of data thats filled (in bytes)
     length_bytes: int = 0
 
+    def reset(self):
+        self.rw_idx = 0
+        self.length_bytes = 0
+
 
 @dataclass
 class SpeakerTrack:
@@ -60,6 +64,9 @@ class SpeakerTrack:
     def reset_playback(self):
         self.track.rw_idx = 0
 
+    def reset(self):
+        self.track.reset()
+
 
 @dataclass
 class MicTrack:
@@ -93,8 +100,7 @@ class MicTrack:
         return True
 
     def reset(self):
-        self.track.rw_idx = 0
-        self.track.length_bytes = 0
+        self.track.reset()
         self.is_full = False
 
 
@@ -130,6 +136,8 @@ class Mixer:
         return out_data, pyaudio.paContinue
 
     def mix(self):
+        # TODO: this pattern of external mutex access seems quite risky in terms
+        # of creating dead-locks
         with self.mic_track.track.mutex, self.speaker_track.track.mutex:
             if self.mic_track.track.length_bytes == 0:
                 return
@@ -211,3 +219,9 @@ class Mixer:
                 self.speaker_track.track.length_bytes = new_speaker_len_bytes
             self.mic_track.reset()
             self.speaker_track.reset_playback()
+
+    def reset(self):
+        """resets both mic and speaker tracks (without releasing their memory)"""
+        with self.mic_track.track.mutex, self.speaker_track.track.mutex:
+            self.mic_track.reset()
+            self.speaker_track.reset()
