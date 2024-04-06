@@ -18,8 +18,8 @@ class Looper(App):
         self.dark = True
         max_track_length_seconds = 10
         self.mixer = Mixer.create_mixer(track_length_seconds=max_track_length_seconds)
-        self.mic = Mic.from_blueyeti(mixer=self.mixer)
-        self.speaker = Speaker.from_bt_headphones(mixer=self.mixer)
+        self.mic = Mic.from_blueyeti(callback=self.mixer.mic_callback)
+        self.speaker = Speaker.from_bt_headphones(callback=self.mixer.speaker_callback)
         self.speaker.start()
 
     def compose(self) -> ComposeResult:

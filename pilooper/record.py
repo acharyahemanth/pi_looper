@@ -1,3 +1,4 @@
+from collections.abc import Callable
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,7 +26,7 @@ class Mic:
     sample_format: int
 
     @classmethod
-    def from_blueyeti(cls, mixer: Mixer | None = None):
+    def from_blueyeti(cls, callback: Callable | None = None):
         pyaud = pyaudio.PyAudio()
         def_device_info = pyaud.get_default_input_device_info()
         print("using default audio device : ")
@@ -34,14 +35,6 @@ class Mic:
         channels = 1
         sample_rate = SAMPLING_RATE
         sample_format = pyaudio.paInt16
-        match mixer:
-            case None:
-                callback = None
-            case Mixer():
-                callback = mixer.mic_callback
-            case _:
-                assert_never(mixer)
-
         pyaud = pyaudio.PyAudio()
         stream = pyaud.open(
             rate=sample_rate,
@@ -96,7 +89,7 @@ def test_mic(record_seconds: int = 5):
     # mic.record_to_file(record_seconds, Path("./test.wav"))
 
     mixer = Mixer.create_mixer(record_seconds)
-    mic = Mic.from_blueyeti(mixer=mixer)
+    mic = Mic.from_blueyeti(callback=mixer.mic_callback)
     print("* recording...")
     mic.start()
     time.sleep(record_seconds)

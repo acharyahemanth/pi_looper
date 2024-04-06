@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import assert_never
 import wave
 from dataclasses import dataclass
@@ -23,7 +24,7 @@ class Speaker:
     sample_format: int
 
     @classmethod
-    def from_bt_headphones(cls, mixer: Mixer | None = None):
+    def from_bt_headphones(cls, callback: Callable | None = None):
         pyaud = pyaudio.PyAudio()
         def_device_info = pyaud.get_default_output_device_info()
         print("using default audio device : ")
@@ -32,13 +33,6 @@ class Speaker:
         channels = 1
         sample_rate = SAMPLING_RATE
         sample_format = pyaudio.paInt16
-        match mixer:
-            case None:
-                callback = None
-            case Mixer():
-                callback = mixer.speaker_callback
-            case _:
-                assert_never(mixer)
         stream = pyaud.open(
             rate=sample_rate,
             channels=channels,

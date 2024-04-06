@@ -13,8 +13,8 @@ def test_looper():
     record_time_seconds = 3
 
     mixer = Mixer.create_mixer(track_length_seconds=record_time_seconds)
-    mic = Mic.from_blueyeti(mixer=mixer)
-    speaker = Speaker.from_bt_headphones(mixer=mixer)
+    mic = Mic.from_blueyeti(callback=mixer.mic_callback)
+    speaker = Speaker.from_bt_headphones(callback=mixer.speaker_callback)
 
     def record():
         mic.start()
