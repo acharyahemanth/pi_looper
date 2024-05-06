@@ -9,7 +9,7 @@ app = Typer()
 
 
 @app.command()
-def test_looper():
+def live_test_looper():
     record_time_seconds = 3
 
     mixer = Mixer.create_mixer(track_length_seconds=record_time_seconds)
