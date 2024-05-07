@@ -1,4 +1,5 @@
 import logging
+from pilooper.constants import SAMPLING_RATE
 from pilooper.record import Mic
 from pilooper.playback import Speaker
 from pilooper.mixer import Mixer
@@ -242,6 +243,34 @@ def test_metronome():
     mixer.start_metronome()
     np_speaker = np.frombuffer(mixer.speaker_track.track.data, dtype=np.int16)
     assert np.allclose(np_speaker.astype(np.float32), expected_mix)
+
+
+@app.command()
+def test_bpm():
+    bpm = 100
+    mixer = Mixer.create_mixer(track_length_seconds=1, log_level=logging.DEBUG)
+    mixer.set_bpm(bpm)
+
+    samples_per_minute = SAMPLING_RATE * 60
+    samples_per_beat = samples_per_minute // bpm
+
+    # mic audio is out of beat by 1 sample
+    num_record_samples = samples_per_beat + 1
+    mic_audio = np.random.randint(
+        low=np.iinfo(np.int16).min,
+        high=np.iinfo(np.int16).max,
+        dtype=np.int16,
+        size=num_record_samples,
+    )
+    mixer.mic_callback(mic_audio.tobytes(), num_record_samples, 0, {})
+
+    mixer.mix()
+
+    # check that the last sample is rejected
+    np_speaker = np.frombuffer(mixer.speaker_track.track.data, dtype=np.int16)
+    assert mixer.speaker_track.track.length_bytes == (len(mic_audio) - 1) * 2
+    np_speaker = np_speaker[: mixer.speaker_track.track.length_bytes // 2]
+    assert np.allclose(np_speaker, mic_audio[:-1])
 
 
 if __name__ == "__main__":

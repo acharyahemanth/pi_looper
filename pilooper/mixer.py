@@ -163,6 +163,14 @@ class MicTrack:
         self.track.reset()
         self.is_full = False
 
+    def clip_to_beat_boundary(self, bpm: int):
+        samples_per_minute = constants.SAMPLING_RATE * 60
+        samples_per_beat = samples_per_minute // bpm
+        bytes_per_beat = samples_per_beat * 2
+        self.track.length_bytes = (
+            self.track.length_bytes // bytes_per_beat
+        ) * bytes_per_beat
+
 
 @dataclass
 class Mixer:
@@ -172,6 +180,7 @@ class Mixer:
     track_length_seconds: int
     logger: logging.Logger
     metronome: Metronome | None
+    bpm: int | None
 
     @classmethod
     def create_mixer(cls, track_length_seconds: int, log_level=logging.INFO):
@@ -187,6 +196,7 @@ class Mixer:
             track_length_seconds=track_length_seconds,
             logger=logger,
             metronome=None,
+            bpm=None,
         )
 
     def mic_callback(
@@ -277,6 +287,12 @@ class Mixer:
             case _:
                 assert False
 
+    def set_bpm(self, bpm: int):
+        with self.mic_track.track.mutex, self.speaker_track.track.mutex:
+            self.bpm = bpm
+
+        # TODO: should this method also be smart enough to reset the metronome?
+
     def mix(self):
         # TODO: this pattern of external mutex access seems quite risky in terms
         # of creating dead-locks
@@ -284,6 +300,10 @@ class Mixer:
             if self.mic_track.track.length_bytes == 0:
                 return
             self.logger.debug("mix()")
+
+            # use bpm to correct for recording delays
+            if self.bpm is not None:
+                self.mic_track.clip_to_beat_boundary(self.bpm)
 
             # no speaker track so far, just copy over the mic track
             if self.mixed_track.length_bytes == 0:
