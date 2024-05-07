@@ -159,7 +159,7 @@ def test_overflow():
 
 @app.command()
 def test_speaker_loop():
-    mixer = Mixer.create_mixer(track_length_seconds=1, log_level=logging.DEBUG)
+    mixer = Mixer.create_mixer(track_length_seconds=2, log_level=logging.DEBUG)
 
     num_record_samples = 44_100 * 1
     mic_audio = np.random.randint(
@@ -200,6 +200,48 @@ def test_speaker_loop():
     np_speaker = np.frombuffer(full_speaker_audio, dtype=np.int16)
     np_mic_tiled = np.tile(np_mic, 5)
     assert np.allclose(np_speaker, np_mic_tiled)
+
+
+@app.command()
+def test_metronome():
+    mixer = Mixer.create_mixer(track_length_seconds=1, log_level=logging.DEBUG)
+    mixer.add_metronome(bpm=100)
+
+    assert mixer.metronome is not None, "metronome not added successfully"
+
+    # check if metronome is added to the speaker track
+    np_metronome = np.frombuffer(mixer.metronome.track.data, dtype=np.int16)
+    np_speaker = np.frombuffer(mixer.speaker_track.track.data, dtype=np.int16)
+    assert np.allclose(np_metronome, np_speaker)
+
+    # record and check if it plays with the metronome
+    num_record_samples = 44_100 * 1
+    mic_audio = np.random.randint(
+        low=np.iinfo(np.int16).min,
+        high=np.iinfo(np.int16).max,
+        dtype=np.int16,
+        size=num_record_samples,
+    )
+    mixer.mic_callback(mic_audio.tobytes(), num_record_samples, 0, {})
+
+    mixer.mix()
+
+    np_speaker = np.frombuffer(mixer.speaker_track.track.data, dtype=np.int16)
+    expected_mix = mic_audio.astype(np.float32) + np_metronome.astype(np.float32)
+    expected_mix = np.clip(
+        expected_mix, a_min=np.iinfo(np.int16).min, a_max=np.iinfo(np.int16).max
+    )
+    assert np.allclose(np_speaker.astype(np.float32), expected_mix)
+
+    # stop metronome and check if you get just mic audio
+    mixer.stop_metronome()
+    np_speaker = np.frombuffer(mixer.speaker_track.track.data, dtype=np.int16)
+    assert np.allclose(np_speaker.astype(np.float32), mic_audio)
+
+    # start metronome and check if its added
+    mixer.start_metronome()
+    np_speaker = np.frombuffer(mixer.speaker_track.track.data, dtype=np.int16)
+    assert np.allclose(np_speaker.astype(np.float32), expected_mix)
 
 
 if __name__ == "__main__":

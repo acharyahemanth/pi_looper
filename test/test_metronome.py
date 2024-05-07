@@ -19,7 +19,7 @@ Pa_Callback_Flags = (
 
 
 @app.command()
-def test_metronome():
+def live_test_metronome():
     wav_file = Path("/home/acharyahemanth/dev/drumstick_16.wav")
     metronome = Metronome.from_file(bpm=100, wav_file=wav_file, track_length_seconds=3)
 

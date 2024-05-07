@@ -78,6 +78,7 @@ class SpeakerTrack:
 @dataclass
 class Metronome(SpeakerTrack):
     bpm: int
+    enabled: bool
 
     @classmethod
     def from_file(
@@ -107,22 +108,22 @@ class Metronome(SpeakerTrack):
         assert (
             len(wav_audio) / 2 == samples_per_beat
         ), f"havent clipped / padded correctly : {len(wav_audio) / 2}, {samples_per_beat}"
-
-        num_track_bytes = constants.SAMPLING_RATE * track_length_seconds * 2
-        num_track_bytes += num_track_bytes % len(wav_audio)
         np_wav_audio = np.frombuffer(wav_audio, dtype=np.int16)
-        assert (
-            num_track_bytes % len(wav_audio) == 0
-        ), f"somethings off with the clipping / padding calculations : {num_track_bytes} / {len(wav_audio)}"
-        num_tile = num_track_bytes // len(wav_audio)
-        np_track = np.tile(np_wav_audio, num_tile)
+
+        np_track = np.zeros(
+            constants.SAMPLING_RATE * track_length_seconds, dtype=np.int16
+        )
+        num_track_filled = len(np_track) - len(np_track) % samples_per_beat
+        num_tile = num_track_filled // samples_per_beat
+        np_track[:num_track_filled] = np.tile(np_wav_audio, num_tile)
 
         return cls(
             bpm=bpm,
+            enabled=True,
             track=Track(
                 data=bytearray(np_track.tobytes()),
                 mutex=Lock(),
-                length_bytes=num_track_bytes,
+                length_bytes=num_track_filled * 2,
             ),
         )
 
@@ -168,7 +169,9 @@ class Mixer:
     mic_track: MicTrack
     speaker_track: SpeakerTrack
     mixed_track: Track
+    track_length_seconds: int
     logger: logging.Logger
+    metronome: Metronome | None
 
     @classmethod
     def create_mixer(cls, track_length_seconds: int, log_level=logging.INFO):
@@ -181,7 +184,9 @@ class Mixer:
                 track=Track(data=bytearray(buff_len), mutex=Lock())
             ),
             mixed_track=Track(data=bytearray(buff_len), mutex=Lock()),
+            track_length_seconds=track_length_seconds,
             logger=logger,
+            metronome=None,
         )
 
     def mic_callback(
@@ -196,10 +201,81 @@ class Mixer:
         out_data = self.speaker_track.next(frame_count=frame_count)
         return out_data, pyaudio.paContinue
 
+    def add_metronome(self, bpm: int):
+        with self.speaker_track.track.mutex:
+            wav_file = Path("/home/acharyahemanth/dev/drumstick_16.wav")
+            self.metronome = Metronome.from_file(
+                bpm=bpm,
+                wav_file=wav_file,
+                track_length_seconds=self.track_length_seconds,
+            )
+            self._update_speaker()
+
+    def start_metronome(self):
+        if self.metronome is None:
+            return
+
+        with self.metronome.track.mutex:
+            self.metronome.enabled = True
+
+        self._update_speaker()
+
+    def stop_metronome(self):
+        if self.metronome is None:
+            return
+
+        with self.metronome.track.mutex:
+            self.metronome.enabled = False
+
+        self._update_speaker()
+
     def _update_speaker(self):
-        self.speaker_track.track.data = self.mixed_track.data
-        self.speaker_track.track.length_bytes = self.mixed_track.length_bytes
+        def _no_metronome():
+            self.speaker_track.track.data = self.mixed_track.data
+            self.speaker_track.track.length_bytes = self.mixed_track.length_bytes
+
         self.speaker_track.reset_playback()
+        match self.metronome:
+            case None:
+                _no_metronome()
+            case Metronome():
+                with self.metronome.track.mutex:
+                    if not self.metronome.enabled:
+                        _no_metronome()
+                        return
+                    if self.mixed_track.length_bytes == 0:
+                        # nothing mixed yet, just copy over the metronome
+                        self.speaker_track.track.data = self.metronome.track.data
+                        self.speaker_track.track.length_bytes = (
+                            self.metronome.track.length_bytes
+                        )
+                    else:
+                        # mix metronome with mixed_track
+                        np_mixed = np.frombuffer(self.mixed_track.data, dtype=np.int16)
+                        np_metronome = np.frombuffer(
+                            self.metronome.track.data, dtype=np.int16
+                        )
+                        new_mixed = np_mixed.astype(np.int32) + np_metronome.astype(
+                            np.int32
+                        )
+                        new_mixed = np.clip(
+                            new_mixed,
+                            a_min=np.iinfo(np.int16).min,
+                            a_max=np.iinfo(np.int16).max,
+                        )
+                        new_mixed = new_mixed.astype(np.int16)
+                        self.speaker_track.track.data = bytearray(new_mixed.tobytes())
+                        self.speaker_track.track.data[
+                            self.mixed_track.length_bytes :
+                        ] = bytearray(
+                            len(self.speaker_track.track.data)
+                            - self.mixed_track.length_bytes
+                        )
+                        self.speaker_track.track.length_bytes = (
+                            self.mixed_track.length_bytes
+                        )
+            case _:
+                assert False
 
     def mix(self):
         # TODO: this pattern of external mutex access seems quite risky in terms
