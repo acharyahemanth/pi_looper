@@ -1,5 +1,5 @@
 import time
-from pilooper.mixer import Metronome
+from pilooper.metronome import Metronome
 
 from pathlib import Path
 from typer import Typer

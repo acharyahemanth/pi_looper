@@ -1,13 +1,13 @@
 from __future__ import annotations
 from pathlib import Path
-import wave
 import numpy as np
 from dataclasses import dataclass
-from collections import deque
 import pyaudio
 import pilooper.constants as constants
 from threading import Lock
 import logging
+from pilooper.track import SpeakerTrack, MicTrack, Track
+from pilooper.metronome import Metronome
 
 Pa_Callback_Flags = (
     pyaudio.paInputUnderflow
@@ -15,161 +15,6 @@ Pa_Callback_Flags = (
     | pyaudio.paOutputOverflow
     | pyaudio.paOutputUnderflowed
 )
-
-
-@dataclass
-class Track:
-    data: bytearray
-    mutex: Lock
-    # index to start reading / writing (depending on speaker / mic)
-    rw_idx: int = 0
-    # length of data thats filled (in bytes)
-    length_bytes: int = 0
-
-    def reset(self):
-        self.rw_idx = 0
-        self.length_bytes = 0
-
-
-@dataclass
-class SpeakerTrack:
-    track: Track
-
-    def next(self, frame_count: int) -> bytes:
-        if not self.track.mutex.acquire():
-            print("speaker_callback() : speaker blocked, returning...")
-            return bytes(0)
-
-        # no data yet, play nothing
-        if self.track.length_bytes == 0:
-            self.track.mutex.release()
-            return bytes(frame_count * 2)
-
-        if self.track.length_bytes < frame_count * 2:
-            print(
-                f"warning : not enough speaker data, {len(self.track.data)/2}/{frame_count} speaker stream may stop!"
-            )
-
-        num_bytes = min(frame_count * 2, self.track.length_bytes)
-        start = self.track.rw_idx
-        end = (self.track.rw_idx + num_bytes) % (self.track.length_bytes + 1)
-        if end < start:
-            end += 1
-            mem = memoryview(
-                self.track.data[start : self.track.length_bytes] + self.track.data[:end]
-            )
-        else:
-            mem = memoryview(self.track.data[start:end])
-        assert (
-            len(mem) == num_bytes
-        ), f"didnt pick correct number of bytes : start : {start}, end : {end}, track_length : {self.track.length_bytes}, len(mem) : {len(mem)}"
-
-        self.track.rw_idx = end % self.track.length_bytes
-        self.track.mutex.release()
-        return bytes(mem)
-
-    def reset_playback(self):
-        self.track.rw_idx = 0
-
-    def reset(self):
-        self.track.reset()
-
-
-@dataclass
-class Metronome(SpeakerTrack):
-    bpm: int
-    enabled: bool
-
-    @classmethod
-    def from_file(
-        cls, wav_file: Path, bpm: int, track_length_seconds: int
-    ) -> Metronome:
-        wav_audio = bytearray(0)
-        with wave.open(str(wav_file), "rb") as wf:
-            while len(data := wf.readframes(1024)):  # Requires Python 3.8+ for :=
-                wav_audio.extend(data)
-        # assert (
-        #    len(wav_audio) < constants.SAMPLING_RATE
-        # ), "this method assumes wav file duration < 1s"
-        samples_per_minute = constants.SAMPLING_RATE * 60
-        samples_per_beat = (
-            samples_per_minute // bpm
-        )  # TODO : is this the right thing to do?
-
-        # clip / extend wav audio to samples per beat
-        num_wav_samples = len(wav_audio) // 2
-        if num_wav_samples < samples_per_beat:
-            padding = samples_per_beat - num_wav_samples
-            zeros = np.zeros(padding, dtype=np.int16)
-            wav_audio.extend(zeros.tobytes())
-        else:
-            clip_bytes = samples_per_beat * 2
-            wav_audio = wav_audio[:clip_bytes]
-        assert (
-            len(wav_audio) / 2 == samples_per_beat
-        ), f"havent clipped / padded correctly : {len(wav_audio) / 2}, {samples_per_beat}"
-        np_wav_audio = np.frombuffer(wav_audio, dtype=np.int16)
-
-        np_track = np.zeros(
-            constants.SAMPLING_RATE * track_length_seconds, dtype=np.int16
-        )
-        num_track_filled = len(np_track) - len(np_track) % samples_per_beat
-        num_tile = num_track_filled // samples_per_beat
-        np_track[:num_track_filled] = np.tile(np_wav_audio, num_tile)
-
-        return cls(
-            bpm=bpm,
-            enabled=True,
-            track=Track(
-                data=bytearray(np_track.tobytes()),
-                mutex=Lock(),
-                length_bytes=num_track_filled * 2,
-            ),
-        )
-
-
-@dataclass
-class MicTrack:
-    track: Track
-    is_full: bool = False
-
-    def save(self, in_data: bytes, frame_count: int) -> bool:
-        if self.is_full:
-            return False
-        if not self.track.mutex.acquire():
-            print("mic_callback() : mic blocked, returning...")
-            return False
-
-        num_bytes = frame_count * 2
-        assert (
-            len(in_data) == num_bytes
-        ), f"not using int16? len(in_data): {len(in_data)}, frame_count: {frame_count}"
-
-        start = self.track.rw_idx
-        end = start + num_bytes
-        self.is_full = end >= len(self.track.data)
-        if self.is_full:
-            end = len(self.track.data)
-
-        num_bytes = end - start
-        self.track.data[start:end] = in_data[:num_bytes]
-        self.track.rw_idx = end
-        self.track.length_bytes = end
-        self.track.mutex.release()
-
-        return True
-
-    def reset(self):
-        self.track.reset()
-        self.is_full = False
-
-    def clip_to_beat_boundary(self, bpm: int):
-        samples_per_minute = constants.SAMPLING_RATE * 60
-        samples_per_beat = samples_per_minute // bpm
-        bytes_per_beat = samples_per_beat * 2
-        self.track.length_bytes = (
-            self.track.length_bytes // bytes_per_beat
-        ) * bytes_per_beat
 
 
 @dataclass

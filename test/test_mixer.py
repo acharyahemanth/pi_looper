@@ -1,7 +1,5 @@
 import logging
 from pilooper.constants import SAMPLING_RATE
-from pilooper.record import Mic
-from pilooper.playback import Speaker
 from pilooper.mixer import Mixer
 from typer import Typer
 import numpy as np
