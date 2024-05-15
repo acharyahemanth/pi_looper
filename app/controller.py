@@ -31,6 +31,7 @@ class UIState:
     enable_metronome: MaybeBool
     enable_beat_sync: MaybeBool
     record: MaybeBool
+    stop: MaybeBool
     reset: MaybeBool
     mix: MaybeBool
 
@@ -91,8 +92,13 @@ class Controller:
             if ui_state.enable_beat_sync.value:
                 self.mixer.set_bpm(ui_state.bpm.value)
 
-        assert ui_state.reset.value is False
+        assert ui_state.stop.value is False
         assert ui_state.mix.value is False
+
+        # reset everything so far
+        if ui_state.reset:
+            self.mixer.reset()
+            return
 
         # start recording
         if ui_state.record:
@@ -108,9 +114,16 @@ class Controller:
             warn("mixer is already recording!")
             return
 
-        if ui_state.reset:
+        if ui_state.stop:
             self.mic.stop()
             self.mixer.reset_mic_track()
+            self.state = ControllerState.READY_TO_RECORD
+            return
+
+        # reset everything so far
+        if ui_state.reset:
+            self.mic.stop()
+            self.mixer.reset()
             self.state = ControllerState.READY_TO_RECORD
             return
 

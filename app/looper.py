@@ -67,6 +67,7 @@ class Callbacks:
             "record_cb",
             "reset_cb",
             "mix_cb",
+            "stop_cb",
         }
     )
 
@@ -98,6 +99,7 @@ class Callbacks:
         curr_ui_state.record.has_changed = st.session_state.get("record_cb", False)
         curr_ui_state.reset.has_changed = st.session_state.get("reset_cb", False)
         curr_ui_state.mix.has_changed = st.session_state.get("mix_cb", False)
+        curr_ui_state.stop.has_changed = st.session_state.get("stop_cb", False)
 
 
 def sidebar() -> UIState:
@@ -106,7 +108,7 @@ def sidebar() -> UIState:
         with st.container(border=True):
             # bpm
             bpm = st.number_input(
-                "Enter beats per minute (BPM) :drum_with_drumsticks:",
+                "Enter beats per minute (BPM) :stopwatch:",
                 min_value=0,
                 value=None,
                 step=10,
@@ -152,13 +154,13 @@ def sidebar() -> UIState:
             )
             record = record_button()
 
-            reset = st.button(
-                f":gray-background[:leftwards_arrow_with_hook: Reset]",
-                key="reset_button",
+            stop = st.button(
+                f":gray-background[:x: Stop]",
+                key="stop_button",
                 use_container_width=True,
                 disabled=not record,
                 on_click=cb.reset_record,
-                kwargs={"key": "reset_cb", "record_button": record_button},
+                kwargs={"key": "stop_cb", "record_button": record_button},
             )
 
             mix = st.button(
@@ -170,11 +172,20 @@ def sidebar() -> UIState:
                 kwargs={"key": "mix_cb", "record_button": record_button},
             )
 
+            reset = st.button(
+                f":gray-background[:arrows_counterclockwise: Reset]",
+                key="reset_button",
+                use_container_width=True,
+                on_click=cb.reset_record,
+                kwargs={"key": "reset_cb", "record_button": record_button},
+            )
+
         ui_state = UIState(
             bpm=MaybeInt(bpm),  # pyright: ignore
             enable_metronome=MaybeBool(enable_metronome),
             enable_beat_sync=MaybeBool(enable_beat_sync),
             record=MaybeBool(record),
+            stop=MaybeBool(stop),
             reset=MaybeBool(reset),
             mix=MaybeBool(mix),
         )
