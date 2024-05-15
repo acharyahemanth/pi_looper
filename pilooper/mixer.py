@@ -44,6 +44,10 @@ class Mixer:
             bpm=None,
         )
 
+    def reset_mic_track(self):
+        with self.mic_track.track.mutex:
+            self.mic_track.reset()
+
     def mic_callback(
         self, in_data: bytes, frame_count: int, _: dict, __: Pa_Callback_Flags
     ):
@@ -132,11 +136,9 @@ class Mixer:
             case _:
                 assert False
 
-    def set_bpm(self, bpm: int):
+    def set_bpm(self, bpm: int | None):
         with self.mic_track.track.mutex, self.speaker_track.track.mutex:
             self.bpm = bpm
-
-        # TODO: should this method also be smart enough to reset the metronome?
 
     def mix(self):
         # TODO: this pattern of external mutex access seems quite risky in terms
