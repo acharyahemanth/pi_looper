@@ -4,6 +4,8 @@ from enum import Enum
 from typing import assert_never
 import streamlit as st
 from typer.models import NoneType
+import pandas as pd
+import numpy as np
 
 from pilooper.mixer import Mixer
 from pilooper.playback import Speaker
@@ -67,6 +69,14 @@ class Controller:
         self.mixer.add_metronome(bpm.value)
         self.mixer.start_metronome()
 
+    def _update_plots(self):
+        np_mic = np.frombuffer(self.mixer.mic_track.track.data, np.int16).astype(
+            np.float32
+        )
+        np_mic = np_mic[::5][:500_000]
+        df = pd.DataFrame({"y": np_mic})
+        st.line_chart(data=df, x=None, y="y")
+
     def _state_ready_to_record(self, ui_state: UIState):
         # metronome
         if ui_state.enable_metronome.has_changed:
@@ -129,6 +139,7 @@ class Controller:
 
         if ui_state.mix:
             self.mic.stop()
+            # self._update_plots()
             self.mixer.mix()
             self.state = ControllerState.READY_TO_RECORD
             return
