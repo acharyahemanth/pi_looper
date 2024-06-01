@@ -115,7 +115,7 @@ def setup_gpio_callbacks(record: RecordButton, cb: Callbacks):
     ctx = get_script_run_ctx()  # create a context
     assert ctx is not None
 
-    def gpio_cb():
+    def gpio_cb_record_and_mix():
         print("button press!")
         add_script_run_ctx(None, ctx)
         is_recording = st.session_state.get(record.in_pressed_state_key, False)
@@ -128,18 +128,32 @@ def setup_gpio_callbacks(record: RecordButton, cb: Callbacks):
         # but doesnt seem to notify the st to rerun the ui thread
         notify()
 
-    b = Button(pin=17, pull_up=True, bounce_time=0.1)
-    b.when_activated = gpio_cb
-    b.when_deactivated = gpio_cb
-    st.session_state["gpio_button"] = b
+    def gpio_cb_stop():
+        print("stop press!")
+        add_script_run_ctx(None, ctx)
+        cb.reset_record(key="stop_cb", record_button=record)
+        st.session_state["gpio_stop"] = True
+        notify()
+
+    gpio_record_and_mix = Button(pin=17, pull_up=True, bounce_time=0.1)
+    gpio_record_and_mix.when_activated = gpio_cb_record_and_mix
+    gpio_record_and_mix.when_deactivated = gpio_cb_record_and_mix
+    st.session_state["gpio_record_and_mix_button"] = gpio_record_and_mix
+
+    gpio_stop = Button(pin=23, pull_up=True, bounce_time=0.1)
+    gpio_stop.when_activated = gpio_cb_stop
+    gpio_stop.when_deactivated = gpio_cb_stop
+    st.session_state["gpio_stop_button"] = gpio_stop
 
 
 def add_updates_from_gpio(ui_state: UIState):
     # note : record is handled in a different way
     ui_state.mix.value |= st.session_state.get("gpio_mix", False)
+    ui_state.stop.value |= st.session_state.get("gpio_stop", False)
 
     # reset gpio flags
     st.session_state["gpio_mix"] = False
+    st.session_state["gpio_stop"] = False
 
 
 def sidebar() -> UIState:
