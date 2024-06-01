@@ -4,8 +4,14 @@ import streamlit as st
 from streamlit.type_util import maybe_tuple_to_list
 from streamlit_extras.stylable_container import stylable_container
 from dataclasses import dataclass, asdict, field
+from gpiozero import Button
+from threading import Thread
+import time
+from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 from app.controller import Controller, MaybeBool, MaybeInt, UIState
+from app.notify import notify
 
 
 @dataclass
@@ -20,41 +26,43 @@ class RecordButton:
     disabled: bool
     args: tuple[str, ...]
 
+    def __post_init__(self):
+        self.color_key = f"{self.name}_button_color"
+        self.msg_key = f"{self.name}_button_msg"
+        self.is_pressed_now_key = f"{self.name}_button_pressed_now"
+        self.in_pressed_state_key = f"{self.name}_button_pressed_state"
+
     def __call__(self) -> bool:
-        color_key = f"{self.name}_button_color"
-        msg_key = f"{self.name}_button_msg"
-        is_pressed_now_key = f"{self.name}_button_pressed_now"
-        in_pressed_state_key = f"{self.name}_button_pressed_state"
-        prev_color = st.session_state.get(color_key, self.unpressed_color)
-        prev_msg = st.session_state.get(msg_key, self.unpressed_msg)
+        prev_color = st.session_state.get(self.color_key, self.unpressed_color)
+        prev_msg = st.session_state.get(self.msg_key, self.unpressed_msg)
 
-        def _on_click():
-            st.session_state[color_key] = self.pressed_color
-            st.session_state[msg_key] = self.pressed_msg
-            st.session_state[is_pressed_now_key] = True
-            st.session_state[in_pressed_state_key] = True
-            self.on_click(self.args)
-
-        is_pressed = st.session_state.get(is_pressed_now_key, False) | st.button(
+        # note : the reason we have is_pressed_now_key (instead of just reading the state from
+        # the button) is : because we bake the msg / color into the name and when we click
+        # we modify the msg / color which modifies the button hash : streamlit doesnt know its
+        # the same button which changed!
+        is_pressed = st.session_state.get(self.is_pressed_now_key, False) | st.button(
             f":{prev_color}-background[:{self.icon}: {prev_msg}]",
             key=f"{self.name}_button",
-            on_click=_on_click,
+            on_click=self.on_press,
             use_container_width=True,
             disabled=self.disabled,
         )
 
-        st.session_state[is_pressed_now_key] = False
+        st.session_state[self.is_pressed_now_key] = False
         return is_pressed
 
+    def on_press(self):
+        st.session_state[self.color_key] = self.pressed_color
+        st.session_state[self.msg_key] = self.pressed_msg
+        st.session_state[self.is_pressed_now_key] = True
+        st.session_state[self.in_pressed_state_key] = True
+        self.on_click(self.args)
+
     def reset(self):
-        color_key = f"{self.name}_button_color"
-        msg_key = f"{self.name}_button_msg"
-        is_pressed_now_key = f"{self.name}_button_pressed_now"
-        in_pressed_state_key = f"{self.name}_button_pressed_state"
-        st.session_state[color_key] = self.unpressed_color
-        st.session_state[msg_key] = self.unpressed_msg
-        st.session_state[is_pressed_now_key] = False
-        st.session_state[in_pressed_state_key] = False
+        st.session_state[self.color_key] = self.unpressed_color
+        st.session_state[self.msg_key] = self.unpressed_msg
+        st.session_state[self.is_pressed_now_key] = False
+        st.session_state[self.in_pressed_state_key] = False
 
 
 @dataclass
@@ -100,6 +108,38 @@ class Callbacks:
         curr_ui_state.reset.has_changed = st.session_state.get("reset_cb", False)
         curr_ui_state.mix.has_changed = st.session_state.get("mix_cb", False)
         curr_ui_state.stop.has_changed = st.session_state.get("stop_cb", False)
+
+
+@st.cache_resource
+def setup_gpio_callbacks(record: RecordButton, cb: Callbacks):
+    ctx = get_script_run_ctx()  # create a context
+    assert ctx is not None
+
+    def gpio_cb():
+        print("button press!")
+        add_script_run_ctx(None, ctx)
+        is_recording = st.session_state.get(record.in_pressed_state_key, False)
+        if not is_recording:
+            record.on_press()
+        else:
+            cb.reset_record(key="mix_cb", record_button=record)
+            st.session_state["gpio_mix"] = True
+        # note : just st.rerun() doesnt work : that just kills the current thread
+        # but doesnt seem to notify the st to rerun the ui thread
+        notify()
+
+    b = Button(pin=17, pull_up=True, bounce_time=0.1)
+    b.when_activated = gpio_cb
+    b.when_deactivated = gpio_cb
+    st.session_state["gpio_button"] = b
+
+
+def add_updates_from_gpio(ui_state: UIState):
+    # note : record is handled in a different way
+    ui_state.mix.value |= st.session_state.get("gpio_mix", False)
+
+    # reset gpio flags
+    st.session_state["gpio_mix"] = False
 
 
 def sidebar() -> UIState:
@@ -189,9 +229,12 @@ def sidebar() -> UIState:
             reset=MaybeBool(reset),
             mix=MaybeBool(mix),
         )
+        add_updates_from_gpio(ui_state)
 
         cb.update_changes(ui_state)
         cb.reset()
+
+        setup_gpio_callbacks(record_button, cb)
 
         return ui_state
 
