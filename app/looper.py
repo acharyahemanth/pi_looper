@@ -1,4 +1,4 @@
-from ast import Call
+import subprocess
 from typing import Callable, dataclass_transform
 import streamlit as st
 from streamlit.type_util import maybe_tuple_to_list
@@ -12,6 +12,7 @@ from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 from app.controller import Controller, MaybeBool, MaybeInt, UIState
 from app.notify import notify
+from pilooper.constants import MAC_ADDRESS_HEADPHONES, MAC_ADDRESS_SPEAKER
 
 
 @dataclass
@@ -156,6 +157,37 @@ def add_updates_from_gpio(ui_state: UIState):
     st.session_state["gpio_stop"] = False
 
 
+def connect_speaker(speaker_choice: str, prev_speaker_choice: str | None):
+    mac_addresses = {
+        "headphones": MAC_ADDRESS_HEADPHONES,
+        "speaker": MAC_ADDRESS_SPEAKER,
+    }
+
+    # nothing to do
+    if prev_speaker_choice is not None and prev_speaker_choice == speaker_choice:
+        return
+
+    # disconnect prev choice
+    if prev_speaker_choice is not None:
+        if (
+            subprocess.call(
+                ["bluetoothctl", "disconnect", mac_addresses[prev_speaker_choice]]
+            )
+            != 0
+        ):
+            st.toast(f"disconnecting {prev_speaker_choice} failed :(")
+            st.session_state["speaker_choice"] = None
+            return
+
+    # connect new speaker
+    if subprocess.call(["bluetoothctl", "connect", mac_addresses[speaker_choice]]) != 0:
+        st.toast(f"switching to {speaker_choice} failed :(")
+        st.session_state["speaker_choice"] = None
+        return
+
+    st.session_state["speaker_choice"] = speaker_choice
+
+
 def sidebar() -> UIState:
     cb = Callbacks()
     with st.sidebar:
@@ -193,6 +225,26 @@ def sidebar() -> UIState:
                 on_change=cb.default,
                 args=("beat_sync_cb",),
             )
+
+        with st.container(border=True):
+            options = {
+                "headphones": ":headphones: headphones",
+                "speaker": ":loud_sound: speaker",
+            }
+            speaker_choice = st.radio(
+                label="Choose output", options=list(options.values())
+            )
+            match speaker_choice:
+                case ":headphones: headphones":
+                    speaker_choice = "headphones"
+                case ":loud_sound: speaker":
+                    speaker_choice = "speaker"
+                case _:
+                    assert False
+            prev_speaker_choice = st.session_state.get("speaker_choice", None)
+            connect_speaker(speaker_choice, prev_speaker_choice)
+            # note : setting the speaker choice even if the call fails because the radio
+            # button gets set anyway
 
         with st.container(border=True):
             record_button = RecordButton(
