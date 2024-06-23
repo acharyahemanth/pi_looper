@@ -1,5 +1,7 @@
 # pi_looper : a guitar loop pedal for the raspberry pi 
 
+[![Watch the video](https://img.youtube.com/vi/<JfG4PdhbKrM>/maxresdefault.jpg)]([https://youtu.be/T-D1KVIuvjA](https://www.youtube.com/watch?v=JfG4PdhbKrM))
+
 this project implements an acoustic guitar looper pedal built for the raspberry pi-5. guitar loopers typically work with electric / semi-acoustics which have an electrical out. the looper records this electrical out and allows you to play it back while recording a second track over it. if you have a pure acoustic, one could try doing these things with garage-band and a mic, but operating it with a mouse is simply pathetic and im not sure how easy it is to hook up garage-band to a foot pedal. more importantly doing it on a r-pi with your own code is so much cooler. 
 
 the way this works is as follows : 
