@@ -19,7 +19,7 @@ to use this project, you will need :
 - a raspberry pi (5) running ubuntu23.10
 - a usb microphone
 - a pair of headphones
-- ![6.3mm guitar socket] (https://www.thomann.de/at/adam_hall_klinkenbuchse_7217pcb02_pack.htm)
+- [6.3mm guitar socket] (https://www.thomann.de/at/adam_hall_klinkenbuchse_7217pcb02_pack.htm)
 - a foot-pedal (the one i use is : LeadFoot FS-2)
 - a breadboard and some jumper cables
 - an acoustic guitar
@@ -27,9 +27,12 @@ to use this project, you will need :
 
 ## setup
 ![IMG_9195](https://github.com/acharyahemanth/pi_looper/assets/12888666/51a3965e-3206-483f-b2a6-e8006bd2bf57)
-- Connect USB mic to the r-pi
-- Mount the guitar socket on the breadboard. Connect GPIO pins 17 and 23 as shown to the socket pins
-- Connect the foot-pedal's guitar cable to the socket
+- connect USB mic to the r-pi
+- mount the guitar socket on the breadboard.
+- connect gpio pins 17 to the pin corresponding to switch-1
+- connect gpio pins 23 to the pin corresponding to switch-2
+- connect one of the ground gpio pins to the ground pin of the socket
+- connect the foot-pedal's guitar cable to the socket
 
 ### install dependencies
 ```
