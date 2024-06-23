@@ -36,6 +36,7 @@ class UIState:
     stop: MaybeBool
     reset: MaybeBool
     mix: MaybeBool
+    clip_50: MaybeBool
 
 
 class ControllerState(Enum):
@@ -94,6 +95,10 @@ class Controller:
                 bpm = None
             self.mixer.set_bpm(bpm)
 
+        # clip mic track to 50%
+        if ui_state.clip_50.has_changed:
+            self.mixer.set_clip50(ui_state.clip_50.value)
+
         # bpm has changed, restart metronome / beat-sync
         if ui_state.bpm.has_changed:
             if self.mixer.metronome is not None:
@@ -119,6 +124,10 @@ class Controller:
         assert not ui_state.bpm.has_changed
         assert not ui_state.enable_metronome.has_changed
         assert not ui_state.enable_beat_sync.has_changed
+
+        # clip mic track to 50%
+        if ui_state.clip_50.has_changed:
+            self.mixer.set_clip50(ui_state.clip_50.value)
 
         if ui_state.record:
             warn("mixer is already recording!")

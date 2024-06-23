@@ -77,6 +77,7 @@ class Callbacks:
             "reset_cb",
             "mix_cb",
             "stop_cb",
+            "clip_50_cb",
         }
     )
 
@@ -109,6 +110,7 @@ class Callbacks:
         curr_ui_state.reset.has_changed = st.session_state.get("reset_cb", False)
         curr_ui_state.mix.has_changed = st.session_state.get("mix_cb", False)
         curr_ui_state.stop.has_changed = st.session_state.get("stop_cb", False)
+        curr_ui_state.clip_50.has_changed = st.session_state.get("clip_50_cb", False)
 
 
 @st.cache_resource
@@ -226,6 +228,15 @@ def sidebar() -> UIState:
                 args=("beat_sync_cb",),
             )
 
+            # clip 50
+            clip_50 = st.toggle(
+                "Enable clip 50%",
+                key="clip_50",
+                help="recorded track is clipped to first half (to avoid pedal click)",
+                on_change=cb.default,
+                args=("clip_50_cb",),
+            )
+
         with st.container(border=True):
             options = {
                 "headphones": ":headphones: headphones",
@@ -294,6 +305,7 @@ def sidebar() -> UIState:
             stop=MaybeBool(stop),
             reset=MaybeBool(reset),
             mix=MaybeBool(mix),
+            clip_50=MaybeBool(clip_50),
         )
         add_updates_from_gpio(ui_state)
 

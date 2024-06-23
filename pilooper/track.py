@@ -103,3 +103,7 @@ class MicTrack:
         self.track.length_bytes = (
             self.track.length_bytes // bytes_per_beat
         ) * bytes_per_beat
+
+    def clip_50(self):
+        num_samples = self.track.length_bytes // 2
+        self.track.length_bytes = (num_samples // 2) * 2

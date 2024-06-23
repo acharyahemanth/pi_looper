@@ -26,6 +26,7 @@ class Mixer:
     logger: logging.Logger
     metronome: Metronome | None
     bpm: int | None
+    clip_50: bool | None  # mic tracks are clipped to 50% to avoid pedal clicks
 
     @classmethod
     def create_mixer(cls, track_length_seconds: int, log_level=logging.INFO):
@@ -42,6 +43,7 @@ class Mixer:
             logger=logger,
             metronome=None,
             bpm=None,
+            clip_50=False,
         )
 
     def reset_mic_track(self):
@@ -140,6 +142,10 @@ class Mixer:
         with self.mic_track.track.mutex, self.speaker_track.track.mutex:
             self.bpm = bpm
 
+    def set_clip50(self, clip: bool | None):
+        with self.mic_track.track.mutex, self.speaker_track.track.mutex:
+            self.clip_50 = clip
+
     def mix(self):
         # TODO: this pattern of external mutex access seems quite risky in terms
         # of creating dead-locks
@@ -151,6 +157,10 @@ class Mixer:
             # use bpm to correct for recording delays
             if self.bpm is not None:
                 self.mic_track.clip_to_beat_boundary(self.bpm)
+
+            # clip to first half of the track to avoid pedal click
+            if self.clip_50:
+                self.mic_track.clip_50()
 
             # no speaker track so far, just copy over the mic track
             if self.mixed_track.length_bytes == 0:
@@ -186,6 +196,11 @@ class Mixer:
                 num_tile = extend_to // x_length
                 extended = np.zeros_like(x)
                 extended[: num_tile * x_length] = np.tile(x[:x_length], num_tile)
+                num_pad = extend_to - num_tile * x_length
+                if num_pad > 0:
+                    pad_start = num_tile * x_length
+                    extended[pad_start : pad_start + num_pad] = x[:num_pad]
+
                 self.logger.debug(
                     f"_extend() : extend_to : {extend_to}, num_tile : {num_tile}"
                 )
