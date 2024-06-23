@@ -27,6 +27,7 @@ class Mixer:
     metronome: Metronome | None
     bpm: int | None
     clip_50: bool | None  # mic tracks are clipped to 50% to avoid pedal clicks
+    save_on_mix: bool = False
 
     @classmethod
     def create_mixer(cls, track_length_seconds: int, log_level=logging.INFO):
@@ -44,7 +45,16 @@ class Mixer:
             metronome=None,
             bpm=None,
             clip_50=False,
+            save_on_mix=False,
         )
+
+    def __post_init__(self):
+        import shutil
+
+        if self.save_on_mix:
+            out = Path("./saved_tracks")
+            if out.exists():
+                shutil.rmtree(Path("./saved_tracks"))
 
     def reset_mic_track(self):
         with self.mic_track.track.mutex:
@@ -138,6 +148,21 @@ class Mixer:
             case _:
                 assert False
 
+    def save_mix_track(self):
+        import wave
+
+        out = Path("./saved_tracks")
+        out.mkdir(exist_ok=True, parents=True)
+
+        idx = len(list(out.glob("**/*.wav")))
+        fname = f"track_{idx}.wav"
+
+        with wave.open(str(out / fname), "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(constants.SAMPLING_RATE)
+            wf.writeframes(self.mixed_track.data[: self.mixed_track.length_bytes])
+
     def set_bpm(self, bpm: int | None):
         with self.mic_track.track.mutex, self.speaker_track.track.mutex:
             self.bpm = bpm
@@ -171,13 +196,15 @@ class Mixer:
                 self.mixed_track.length_bytes = num_bytes
                 self.mic_track.reset()
                 self._update_speaker()
+                if self.save_on_mix:
+                    self.save_mix_track()
                 self.logger.debug(
                     f"init speaker track by copying over mic track, mixed_track_len : {self.mixed_track.length_bytes}"
                 )
                 return
 
-            self.logger.debug("mixing mic track with speaker track")
-            self.logger.debug(
+            print("mixing mic track with speaker track")
+            print(
                 f"prev mixed track len : {self.mixed_track.length_bytes}, mic track len : {self.mic_track.track.length_bytes}"
             )
 
@@ -201,9 +228,7 @@ class Mixer:
                     pad_start = num_tile * x_length
                     extended[pad_start : pad_start + num_pad] = x[:num_pad]
 
-                self.logger.debug(
-                    f"_extend() : extend_to : {extend_to}, num_tile : {num_tile}"
-                )
+                print(f"_extend() : extend_to : {extend_to}, num_tile : {num_tile}")
                 return extended, extend_to * 2
 
             extend_mixed_track = (
@@ -212,7 +237,7 @@ class Mixer:
             extend_by_bytes = abs(
                 self.mixed_track.length_bytes - self.mic_track.track.length_bytes
             )
-            self.logger.debug(
+            print(
                 f"extend_mixed_track : {extend_mixed_track} extend_mic_track : {not extend_mixed_track} extend_by : {extend_by_bytes}"
             )
             new_mixed_len_bytes = self.mixed_track.length_bytes
@@ -239,6 +264,9 @@ class Mixer:
             # store mixed track
             self.mixed_track.data = bytearray(new_mixed.tobytes())
             self.mixed_track.length_bytes = new_mixed_len_bytes
+
+            if self.save_on_mix:
+                self.save_mix_track()
 
             # update speaker track
             self.mic_track.reset()
