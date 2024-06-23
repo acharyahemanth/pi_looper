@@ -34,6 +34,10 @@ to use this project, you will need :
 - connect one of the ground gpio pins to the ground pin of the socket
 - connect the foot-pedal's guitar cable to the socket
 
+Note : 
+- gpios are configurable in the code
+- the code uses internal pull-up resistors on the gpio pins, hence no external resistors are required
+
 ### install dependencies
 ```
 sudo apt-get install portaudio19-dev python3.11-dev
