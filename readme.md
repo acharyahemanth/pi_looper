@@ -2,7 +2,7 @@
 
 this project implements an acoustic guitar looper pedal built for the raspberry pi-5. guitar loopers typically work with electric / semi-acoustics which have an electrical out. the looper records this electrical out and allows you to play it back while recording a second track over it. if you have a pure acoustic, one could try doing these things with garage-band and a mic, but operating it with a mouse is simply pathetic and im not sure how easy it is to hook up garage-band to a foot pedal. more importantly doing it on a r-pi with your own code is so much cooler. 
 
-the way it works is as follows : 
+the way this works is as follows : 
 - connect a usb microphone and headphones to the raspberry pi
 - hit record -> record a track -> stop record
 - the recorded track plays back on the headphones
@@ -10,15 +10,18 @@ the way it works is as follows :
 - mixed tracks 1 and 2 play on the headphones
 - and so on...
 
-## what do i need?
+## what you need
 to use this project, you will need : 
 - a raspberry pi (5) running ubuntu23.10
 - a usb microphone
 - a pair of headphones
+- a foot-pedal (the one i use is : LeadFoot FS-2)
+- a breadboard and some jumper cables
 - an acoustic guitar
 - know how to play that guitar
 
 ## setup
+- TODO: write up how the gpios are connected to the rpi via cables
 
 ### install dependencies
 ```
