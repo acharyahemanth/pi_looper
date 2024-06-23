@@ -25,6 +25,7 @@ to use this project, you will need :
 - know how to play that guitar
 
 ## setup
+![IMG_9195](https://github.com/acharyahemanth/pi_looper/assets/12888666/51a3965e-3206-483f-b2a6-e8006bd2bf57)
 - TODO: write up how the gpios are connected to the rpi via cables
 
 ### install dependencies
