@@ -33,10 +33,17 @@ to use this project, you will need :
 - connect gpio pins 23 to the pin corresponding to switch-2
 - connect one of the ground gpio pins to the ground pin of the socket
 - connect the foot-pedal's guitar cable to the socket
+- pair the bluetooth headphones + external speakers and setup their mac-addresses in `constants.py`
 
 Note : 
 - gpios are configurable in the code
 - the code uses internal pull-up resistors on the gpio pins, hence no external resistors are required
+
+## some cool features
+- loop any number of tracks : each track is super-imposed on the previous one. the downside is that you cant switch on and off individual tracks, but on the upside you can loop with an infinite number of tracks with constant runtime memory overhead
+- metronome : set the metronome to play at the required speed
+- sync to beat : if the beats-per-minute is set, the looper is aware off how long a track should be (upto the beat-interval). it uses this information to correct for minor imprecisions in timing you might have made while starting / stopping the track with the pedal
+- clip50 : note from the video my guitar pedal is quite noisy and these clicks get picked up by the mic. this can be compensated by recording longer and clipping the last section of the recorded track
 
 ### install dependencies
 ```
